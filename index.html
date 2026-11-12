@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dhruv Khemka</title>
+  <meta name="description" content="Dhruv Khemka — Mathematics & Computer Science at NYU Tandon. Algorithms, probability, and markets." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="dust" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- ============ HOME ============ -->
+  <header class="hero" id="home">
+    <div class="hero-top">
+      <span class="pill"><span class="dot"></span>Brooklyn, NY</span>
+      <span class="muted">Math &amp; CS @ <span class="accent">NYU Tandon</span></span>
+    </div>
+
+    <div class="hero-stage" id="stage">
+      <div class="node-labels" id="labels"></div>
+      <p class="hint mono small muted">Click a node to explore · drag to spin</p>
+    </div>
+
+    <div class="hero-copy">
+      <nav class="hero-nav" aria-label="Primary">
+        <a href="#/about">About</a>
+        <a href="#/experience">Experience</a>
+        <a href="#/projects">Projects</a>
+        <a href="#/contact">Contact</a>
+        <a href="assets/Dhruv-Khemka-Resume.pdf" target="_blank" rel="noopener">Résumé</a>
+      </nav>
+      <h1 class="wordmark" data-scramble>Dhruv Khemka</h1>
+      <p class="tagline">Algorithms, probability &amp; markets.</p>
+    </div>
+
+    <div class="ticker" aria-label="Highlights">
+      <div class="ticker-track" id="ticker"></div>
+    </div>
+  </header>
+
+  <!-- ============ PAGE BAR ============ -->
+  <nav class="pagebar" aria-label="Pages">
+    <a href="#/" class="home-link">← <span>Dhruv Khemka</span></a>
+    <div class="pagebar-links">
+      <a href="#/about" data-link="about">About</a>
+      <a href="#/experience" data-link="experience">Experience</a>
+      <a href="#/projects" data-link="projects">Projects</a>
+      <a href="#/toolkit" data-link="toolkit">Toolkit</a>
+      <a href="#/contact" data-link="contact">Contact</a>
+    </div>
+  </nav>
+
+  <!-- ============ PAGES ============ -->
+  <main id="pages">
+
+    <!-- ABOUT -->
+    <section class="page" data-page="about" data-title="About" hidden>
+      <div class="title-slot" aria-hidden="true"></div>
+      <h2 class="sr-only">About</h2>
+      <div class="page-body">
+        <div class="about-grid">
+          <p class="lead">
+            I study <em>Mathematics and Computer Science</em> at NYU Tandon. I like problems where a clean
+            piece of math turns into fast, correct code: matching engines, sorting algorithms that learn
+            the shape of their data, and statistical tools for markets.
+          </p>
+          <div class="card edu">
+            <div class="edu-row">
+              <span class="mono small muted">Education</span>
+              <span class="mono small muted">May 2029</span>
+            </div>
+            <h3>New York University</h3>
+            <p class="muted">Tandon School of Engineering · B.S. Mathematics &amp; Computer Science</p>
+            <div class="stats">
+              <div><span class="stat">3.79</span><span class="mono small muted">GPA / 4.00</span></div>
+              <div><span class="stat">’25–26</span><span class="mono small muted">Dean’s List</span></div>
+            </div>
+            <p class="small muted">Data Structures &amp; Algorithms · OOP (C++) · Discrete Math · Probability · Linear Algebra · Differential Equations</p>
+          </div>
+        </div>
+        <a class="next" href="#/experience">Next: Experience →</a>
+      </div>
+    </section>
+
+    <!-- EXPERIENCE -->
+    <section class="page" data-page="experience" data-title="Experience" hidden>
+      <div class="title-slot" aria-hidden="true"></div>
+      <h2 class="sr-only">Experience</h2>
+      <div class="page-body">
+        <ol class="timeline">
+          <li>
+            <div class="when mono">Sep 2026 — Present</div>
+            <div class="what">
+              <h3>Grader &amp; Review Session Tutor</h3>
+              <p class="org">New York University · Dept. of Mathematics for Engineering</p>
+              <ul>
+                <li>Grade homework, quizzes and exams for 80+ Precalculus students (MA-UY 914-C), with written feedback on where their reasoning went wrong.</li>
+                <li>Lead review sessions before both midterms and the final for MA-UY 914.</li>
+                <li>Run three full-day Power-Up reviews spanning Precalculus, Calculus I and Calculus II.</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div class="when mono">Jun — Jul 2024</div>
+            <div class="what">
+              <h3>Research Assistant</h3>
+              <p class="org">IIT Bhubaneswar · Department of Electrical Sciences</p>
+              <ul>
+                <li>Analyzed success/failure data from Wi-Fi module experiments with Ph.D. researchers, checking trial counts met the success–failure condition for the Central Limit Theorem.</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div class="when mono">Jun 2023</div>
+            <div class="what">
+              <h3>Summer Research Intern</h3>
+              <p class="org">NISER · School of Chemical Sciences</p>
+              <ul>
+                <li>Prepared gallium-based organometallic compounds with Ph.D. researchers, tracking and recording ongoing reactions for the group.</li>
+              </ul>
+            </div>
+          </li>
+        </ol>
+        <a class="next" href="#/projects">Next: Projects →</a>
+      </div>
+    </section>
+
+    <!-- PROJECTS -->
+    <section class="page" data-page="projects" data-title="Projects" hidden>
+      <div class="title-slot" aria-hidden="true"></div>
+      <h2 class="sr-only">Projects</h2>
+      <div class="page-body">
+        <div class="projects">
+          <article class="card project">
+            <div class="project-head">
+              <span class="mono small muted">P/01</span>
+              <a class="ext" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener" aria-label="Limit Order Book on GitHub">GitHub ↗</a>
+            </div>
+            <h3>Limit Order Book &amp; Matching Engine</h3>
+            <p>An exchange-style engine that fills limit and market orders by price-time priority, handling partial fills and logging every trade.</p>
+            <div class="metrics">
+              <div><span class="stat">O(log n)</span><span class="mono small muted">best price</span></div>
+              <div><span class="stat">O(1)</span><span class="mono small muted">cancel</span></div>
+              <div><span class="stat">1,000</span><span class="mono small muted">randomized test runs</span></div>
+            </div>
+            <p class="small muted">Price levels are dicts of deques with heaps over bid/ask prices; cancels use lazy deletion. Verified against a brute-force reference book on 1,000 randomized 200-message sequences.</p>
+            <div class="tags"><span>Python</span><span>heapq</span><span>collections</span><span>pytest</span></div>
+          </article>
+
+          <article class="card project">
+            <div class="project-head">
+              <span class="mono small muted">P/02</span>
+              <a class="ext" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener" aria-label="Distribution Sort on GitHub">GitHub ↗</a>
+            </div>
+            <h3>Expected Linear-Time Distribution Sort</h3>
+            <p>A sort that buckets values by a CDF fit to a random sample — uniform, normal or exponential via a Kolmogorov–Smirnov test, else an empirical CDF.</p>
+            <div class="metrics">
+              <div><span class="stat up">3.6×</span><span class="mono small muted">vs merge sort</span></div>
+              <div><span class="stat">O(n)</span><span class="mono small muted">expected</span></div>
+              <div><span class="stat">405K</span><span class="mono small muted">real file records</span></div>
+            </div>
+            <p class="small muted">2.0–3.6× faster than merge sort on 1M generated values and up to 2.7× on real macOS file records. Heavy duplicates erase the gain; output verified against <code>sorted()</code>.</p>
+            <div class="tags"><span>Python</span><span>statistics</span><span>bisect</span></div>
+          </article>
+
+          <article class="card project">
+            <div class="project-head">
+              <span class="mono small muted">P/03</span>
+              <a class="ext" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener" aria-label="Stock Analyzer on GitHub">GitHub ↗</a>
+            </div>
+            <h3>Moving-Average Crossover Stock Analyzer</h3>
+            <p>A CLI that pulls daily prices for any ticker from Yahoo Finance, computes short- and long-window SMAs, and charts every golden and death cross.</p>
+            <div class="spark" aria-hidden="true">
+              <svg viewBox="0 0 300 70" preserveAspectRatio="none">
+                <path class="price" d="M0,50 L15,46 L30,52 L45,40 L60,44 L75,30 L90,34 L105,22 L120,28 L135,18 L150,24 L165,32 L180,28 L195,42 L210,38 L225,50 L240,44 L255,36 L270,30 L285,22 L300,18" />
+                <path class="sma" d="M0,49 C40,46 70,38 110,28 S170,26 200,38 S260,42 300,24" />
+                <circle cx="96" cy="31" r="3.5" class="cross up" />
+                <circle cx="196" cy="38" r="3.5" class="cross down" />
+              </svg>
+            </div>
+            <p class="small muted">Crossovers detected by differencing a short-above-long indicator series; unit tested on synthetic price data.</p>
+            <div class="tags"><span>Python</span><span>pandas</span><span>yfinance</span><span>Matplotlib</span></div>
+          </article>
+        </div>
+        <a class="next" href="#/toolkit">Next: Toolkit →</a>
+      </div>
+    </section>
+
+    <!-- TOOLKIT -->
+    <section class="page" data-page="toolkit" data-title="Toolkit" hidden>
+      <div class="title-slot" aria-hidden="true"></div>
+      <h2 class="sr-only">Toolkit &amp; Recognition</h2>
+      <div class="page-body">
+        <div class="two-col">
+          <div class="card">
+            <h3>Technical skills</h3>
+            <dl class="skills">
+              <dt class="mono small muted">Languages</dt><dd>Python, C++</dd>
+              <dt class="mono small muted">Libraries</dt><dd>pandas, NumPy, Matplotlib, pytest, yfinance, OpenCV, MediaPipe</dd>
+              <dt class="mono small muted">Tools</dt><dd>Git, GitHub, VS Code, CLion, Claude Code</dd>
+            </dl>
+          </div>
+          <div class="card">
+            <h3>Awards &amp; leadership</h3>
+            <ul class="awards">
+              <li><span class="stat sm">AIR 512</span><span>JEE Advanced <em class="muted">· JEE Main AIR 2114</em></span></li>
+              <li><span class="stat sm">Gold</span><span>SOF International Mathematics Olympiad <em class="muted">· Zonal Rank 3</em></span></li>
+              <li><span class="stat sm">50+</span><span>President, Excelomatics Math Club <em class="muted">· workshops &amp; inter-school competitions</em></span></li>
+              <li><span class="stat sm">♞ ×3</span><span>Captain, School Chess Team <em class="muted">· City, District &amp; State titles</em></span></li>
+            </ul>
+          </div>
+        </div>
+        <a class="next" href="#/contact">Next: Contact →</a>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section class="page" data-page="contact" data-title="Contact" hidden>
+      <div class="title-slot" aria-hidden="true"></div>
+      <h2 class="sr-only">Contact</h2>
+      <div class="page-body">
+        <p class="big">Let’s build something <span class="muted">precise.</span></p>
+        <div class="contact-links">
+          <a href="mailto:dk5230@nyu.edu">dk5230@nyu.edu</a>
+          <a href="https://www.linkedin.com/in/dhruv-khemka" target="_blank" rel="noopener">LinkedIn ↗</a>
+          <a href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener">GitHub ↗</a>
+          <a href="assets/Dhruv-Khemka-Resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
+        </div>
+        <a class="next" href="#/">Back to the graph ↺</a>
+      </div>
+    </section>
+
+    <footer class="footer mono small muted">
+      <span>© <span id="year"></span> Dhruv Khemka</span>
+      <a href="#/">Home ↺</a>
+    </footer>
+  </main>
+
+  <script src="main.js"></script>
+</body>
+</html>

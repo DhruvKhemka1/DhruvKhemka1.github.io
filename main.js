@@ -1,5 +1,6 @@
 (() => {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
   const body = document.body;
   body.classList.add("mode-home");
 
@@ -13,11 +14,10 @@
     { id: "toolkit", title: "Toolkit" },
     { id: "contact", title: "Contact" },
   ];
-  // Which icosahedron vertex carries each page
-  const PAGE_NODES = [5, 9, 3, 10, 7];
+  const PAGE_NODES = [5, 9, 3, 10, 7]; // icosahedron vertex carrying each page
 
   /* =========================================================
-     1. Build the particle model
+     1. Build the particle model (the graph)
      ========================================================= */
   let seed = 7;
   const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -53,6 +53,8 @@
       const d = Math.hypot(raw[i][0] - raw[k][0], raw[i][1] - raw[k][1], raw[i][2] - raw[k][2]);
       if (Math.abs(d - 2) < 0.01 && rand() > 0.2) edges.push([i, k]);
     }
+  const adj = nodes.map(() => []);
+  edges.forEach(([a, b]) => { adj[a].push(b); adj[b].push(a); });
 
   const pts = [];
   const owner = [];
@@ -80,7 +82,6 @@
       );
     }
   });
-  // Orbit rings around page nodes
   PAGE_NODES.forEach((idx) => {
     const n = nodes[idx];
     const R = n.r * 1.7;
@@ -103,11 +104,14 @@
   const nodeOf = Int8Array.from(owner);
   const N = nodeOf.length;
 
-  // Per-particle animation state
+  // Per-particle state
   const cur = new Float32Array(N * 2), start = new Float32Array(N * 2);
   const curB = new Float32Array(N), startB = new Float32Array(N);
   const tgt = new Float32Array(N * 2), tgtB = new Float32Array(N);
-  const bgDust = new Uint8Array(N);
+  const S3 = new Float32Array(N * 3);            // page sculpture coordinates
+  const kind = new Uint8Array(N);                // 0 title word · 1 sculpture · 2 ambient
+  const offX = new Float32Array(N), offY = new Float32Array(N); // physics offset
+  const velX = new Float32Array(N), velY2 = new Float32Array(N);
   const delay = new Float32Array(N), swirl = new Float32Array(N);
   for (let i = 0; i < N; i++) {
     delay[i] = Math.random();
@@ -115,13 +119,66 @@
   }
 
   /* =========================================================
-     2. Canvas + layout
+     2. A 3D dust sculpture for every page
+     ========================================================= */
+  const lorenz = (() => {
+    const out = [];
+    let x = 0.1, y = 0, z = 0;
+    const dt = 0.005;
+    for (let i = 0; i < 14000; i++) {
+      const dx = 10 * (y - x), dy = x * (28 - z) - y, dz = x * y - (8 / 3) * z;
+      x += dx * dt; y += dy * dt; z += dz * dt;
+      if (i > 400) out.push(x / 22, -(z - 25) / 22, y / 22);
+    }
+    return out;
+  })();
+
+  const SHAPES = {
+    // Bell curve surface (probability)
+    about: () => {
+      let x = (rand() * 2 - 1) * 1.25, z = (rand() * 2 - 1) * 1.25;
+      if (rand() < 0.75) { if (rand() < 0.5) x = Math.round(x * 5) / 5; else z = Math.round(z * 5) / 5; }
+      return [x, 0.55 - 1.35 * Math.exp(-(x * x + z * z) * 2.2), z];
+    },
+    // Double helix (a timeline, twisted)
+    experience: () => {
+      const t = rand(), s = rand();
+      if (s < 0.84) {
+        const a = t * Math.PI * 7, sign = s < 0.42 ? 1 : -1;
+        return [Math.cos(a) * 0.6 * sign, (t - 0.5) * 2.4, Math.sin(a) * 0.6 * sign];
+      }
+      const tq = Math.round(t * 30) / 30, a = tq * Math.PI * 7, u = rand() * 2 - 1;
+      return [Math.cos(a) * 0.6 * u, (tq - 0.5) * 2.4, Math.sin(a) * 0.6 * u];
+    },
+    // Lorenz attractor (chaos, markets)
+    projects: () => {
+      const k = ((rand() * (lorenz.length / 3)) | 0) * 3;
+      return [lorenz[k], lorenz[k + 1], lorenz[k + 2]];
+    },
+    // Trefoil torus knot
+    toolkit: () => {
+      const t = rand() * Math.PI * 2;
+      const r = 2 + Math.cos(3 * t);
+      return [(r * Math.cos(2 * t)) / 2.7 + gauss() * 0.03, Math.sin(3 * t) / 2.7 + gauss() * 0.03, (r * Math.sin(2 * t)) / 2.7 + gauss() * 0.03];
+    },
+    // Ripple (a signal going out)
+    contact: () => {
+      let r = Math.sqrt(rand()) * 1.35;
+      const a = rand() * Math.PI * 2;
+      if (rand() < 0.6) r = Math.round(r * 9) / 9;
+      return [r * Math.cos(a), 0.2 - (0.55 * Math.cos(r * 9)) / (1 + 2.2 * r), r * Math.sin(a)];
+    },
+  };
+
+  /* =========================================================
+     3. Canvas + layout
      ========================================================= */
   const canvas = document.getElementById("dust");
   const ctx = canvas.getContext("2d");
   const stage = document.getElementById("stage");
   let W = 1, H = 1, dpr = 1, acc, img, buf;
   let stageBox = { x: 0, y: 0, w: 0, h: 0 };
+  let step = finePointer ? 1 : 2; // draw every Nth particle on weaker devices
 
   const measureStage = () => {
     const r = stage.getBoundingClientRect();
@@ -144,17 +201,8 @@
     if (mode === "page" && activePage) layoutPage();
   };
 
-  // Particles start scattered across the screen
-  const scatter = () => {
-    for (let i = 0; i < N; i++) {
-      cur[i * 2] = Math.random() * W;
-      cur[i * 2 + 1] = Math.random() * H;
-      curB[i] = 0;
-    }
-  };
-
   /* =========================================================
-     3. Turning a word into particle targets
+     4. Turning a word into particle targets
      ========================================================= */
   const sampleWord = (text, box) => {
     const w = Math.max(1, Math.round(box.width * dpr));
@@ -187,34 +235,75 @@
   };
 
   let activePage = null;
+  let demo = null; // live project demo running on the current page, if any
+  const docBox = (el) => {
+    let x = 0, y = 0;
+    for (let e = el; e; e = e.offsetParent) { x += e.offsetLeft; y += e.offsetTop; }
+    return { x: x * dpr, y: y * dpr, w: el.offsetWidth * dpr, h: el.offsetHeight * dpr };
+  };
+  // What a demo is allowed to do with its particles (see demos.js)
+  const demoApi = {
+    idx: new Int32Array(0), box: { x: 0, y: 0, w: 1, h: 1 }, dpr: 1, snap: true, busy: true, scroll: 0,
+    set(i, x, y, b) {
+      const nx = this.box.x + x, ny = this.box.y + y, j = i * 2;
+      if (!this.snap) { offX[i] += tgt[j] - nx; offY[i] += tgt[j + 1] - ny; } // stay put, then spring over
+      tgt[j] = nx; tgt[j + 1] = ny; tgtB[i] = b;
+    },
+    nudge(i, dx, dy) { if (!this.snap) { offX[i] += dx; offY[i] += dy; } },
+    kick(i, vx, vy) { if (!this.snap) { velX[i] += vx; velY2[i] += vy; } },
+    blast(x, y, power) { if (!this.snap) blast(this.box.x + x, this.box.y + y - this.scroll, power); },
+  };
   const layoutPage = () => {
     const slot = activePage.querySelector(".title-slot");
     const r = slot.getBoundingClientRect();
     const ox = r.left * dpr, oy = (r.top + window.scrollY) * dpr;
-    const pts = sampleWord(activePage.dataset.title, r);
-    const M = pts.length / 2;
+    const wordPts = sampleWord(activePage.dataset.title, r);
+    const M = wordPts.length / 2;
+    const shape = SHAPES[activePage.dataset.page];
+    const narrow = W / dpr < 820;
+    // keep the title equally bright whether the word is small or huge
+    const pWord = demo ? 0.3 : 0.58;
+    const demoList = [];
+    const density = (pWord * N) / Math.max(1, M);
+    const wordGain = Math.min(2.6, Math.max(0.5, 0.5 / (density * 0.55)));
     for (let i = 0; i < N; i++) {
-      if (M && Math.random() < 0.72) {
+      const u = Math.random();
+      if (M && u < pWord) {
         const k = ((Math.random() * M) | 0) * 2;
-        tgt[i * 2] = ox + pts[k] + (Math.random() - 0.5) * 1.4 * dpr;
-        tgt[i * 2 + 1] = oy + pts[k + 1] + (Math.random() - 0.5) * 1.4 * dpr;
-        tgtB[i] = 0.3 + Math.random() * 0.45;
-        bgDust[i] = 0;
+        tgt[i * 2] = ox + wordPts[k] + (Math.random() - 0.5) * 1.4 * dpr;
+        tgt[i * 2 + 1] = oy + wordPts[k + 1] + (Math.random() - 0.5) * 1.4 * dpr;
+        tgtB[i] = (0.55 + Math.random() * 0.9) * wordGain;
+        kind[i] = 0;
+      } else if (shape && u < 0.93) {
+        const p = shape();
+        S3[i * 3] = p[0]; S3[i * 3 + 1] = p[1]; S3[i * 3 + 2] = p[2];
+        tgtB[i] = (0.2 + Math.random() * 0.35) * (narrow ? 0.6 : 1);
+        kind[i] = 1;
+      } else if (demo && u < 0.94) {
+        kind[i] = 3;
+        demoList.push(i);
       } else {
         tgt[i * 2] = Math.random() * W;
         tgt[i * 2 + 1] = Math.random() * H;
         tgtB[i] = 0.05 + Math.random() * 0.14;
-        bgDust[i] = 1;
+        kind[i] = 2;
       }
+    }
+    if (demo) {
+      demoApi.idx = Int32Array.from(demoList);
+      demoApi.box = docBox(activePage.querySelector("[data-stage]"));
+      demoApi.dpr = dpr;
+      demoApi.snap = true;
+      demo.layout();
     }
   };
 
   /* =========================================================
-     4. Transitions between graph and pages
+     5. Transitions
      ========================================================= */
   let mode = "home";
   let tStart = -1e9;
-  const DUR = reduceMotion ? 1 : 1800;
+  const DUR = reduceMotion ? 1 : 1900;
   const begin = (m) => {
     start.set(cur);
     startB.set(curB);
@@ -223,18 +312,24 @@
   };
 
   /* =========================================================
-     5. Interaction
+     6. Interaction: tilt, drag, hover, shockwaves
      ========================================================= */
   let rotY = 0.6, rotX = -0.25;
   const baseSpin = reduceMotion ? 0 : 0.0025;
-  let velY = baseSpin, targetTiltX = 0, targetTiltY = 0, tiltX = 0, tiltY = 0;
-  const mouse = { x: -9999, y: -9999, active: false };
+  let spin = baseSpin, targetTiltX = 0, targetTiltY = 0, tiltX = 0, tiltY = 0;
+  const mouse = { x: -9999, y: -9999, cx: -100, cy: -100, active: false };
   let dragging = false, moved = 0, lastX = 0, lastY = 0;
   let hovered = -1, labelHover = -1;
   const hoverAmt = new Float32Array(nodes.length);
   const nodeScr = nodes.map(() => ({ x: 0, y: 0, r: 0, z: 0 }));
+  const waves = [];
 
   const toCanvas = (cx, cy) => [cx * (W / (canvas.clientWidth || 1)), cy * (H / (canvas.clientHeight || 1))];
+  const blast = (x, y, power = 1) => {
+    if (reduceMotion) return;
+    waves.push({ x, y, t0: performance.now(), power });
+    if (waves.length > 4) waves.shift();
+  };
 
   const hit = (x, y) => {
     let best = -1, bestZ = Infinity;
@@ -250,10 +345,11 @@
     targetTiltY = (e.clientX / window.innerWidth - 0.5) * 0.6;
     targetTiltX = (e.clientY / window.innerHeight - 0.5) * 0.4;
     [mouse.x, mouse.y] = toCanvas(e.clientX, e.clientY);
+    mouse.cx = e.clientX; mouse.cy = e.clientY;
     mouse.active = true;
     if (dragging) {
       moved += Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY);
-      velY = (e.clientX - lastX) * 0.0009 + velY * 0.5;
+      spin = (e.clientX - lastX) * 0.0009 + spin * 0.5;
       rotX = Math.max(-1.2, Math.min(1.2, rotX + (e.clientY - lastY) * 0.004));
       lastX = e.clientX; lastY = e.clientY;
     }
@@ -267,15 +363,38 @@
     stage.setPointerCapture(e.pointerId);
     stage.classList.add("dragging");
   });
-  stage.addEventListener("pointerup", (e) => {
+  const endDrag = (e) => {
     stage.classList.remove("dragging");
-    if (dragging && moved < 8 && mode === "home") {
-      const [x, y] = toCanvas(e.clientX, e.clientY);
-      const p = hit(x, y);
-      if (p >= 0) location.hash = "#/" + PAGES[p].id;
-    }
     dragging = false;
     if (e.pointerType !== "mouse") mouse.active = false;
+  };
+  stage.addEventListener("pointerup", endDrag);
+  stage.addEventListener("pointercancel", endDrag);
+
+  // Click: node → open its page · anywhere else → shockwave
+  window.addEventListener("click", (e) => {
+    if (e.target.closest("a, button, input, label")) return;
+    const [x, y] = toCanvas(e.clientX, e.clientY);
+    if (mode === "home" && e.target.closest("#stage")) {
+      const wasDrag = moved >= 8;
+      moved = 0;
+      if (wasDrag) return;
+      const p = hit(x, y);
+      if (p >= 0) { blast(x, y, 0.7); location.hash = "#/" + PAGES[p].id; return; }
+    }
+    blast(x, y, 1);
+  });
+
+  // Keyboard: 1–5 pages · ←/→ previous/next · Esc home
+  window.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.closest && e.target.closest("input")) return;
+    const idx = activePage ? PAGES.findIndex((p) => p.id === activePage.dataset.page.split("/")[0]) : -1;
+    if (e.key >= "1" && e.key <= "5") location.hash = "#/" + PAGES[+e.key - 1].id;
+    else if (e.key === "Escape" && demo) location.hash = "#/projects";
+    else if (e.key === "Escape" || e.key === "0") location.hash = "#/";
+    else if (e.key === "ArrowRight") location.hash = "#/" + PAGES[(idx + 1) % PAGES.length].id;
+    else if (e.key === "ArrowLeft" && idx >= 0) location.hash = idx === 0 ? "#/" : "#/" + PAGES[idx - 1].id;
   });
 
   // Floating labels that follow page nodes
@@ -293,24 +412,51 @@
     return a;
   });
 
+  // Data pulses that walk the graph's edges
+  const pulses = Array.from({ length: reduceMotion ? 0 : 7 }, () => {
+    const e = edges[(Math.random() * edges.length) | 0];
+    return { a: e[0], b: e[1], p: Math.random(), s: 0.006 + Math.random() * 0.008 };
+  });
+
+  // Custom cursor + scroll progress
+  const cursorEl = document.querySelector(".cursor");
+  const dotEl = document.querySelector(".cursor-dot");
+  const progressEl = document.querySelector(".progress");
+  let ringX = -100, ringY = -100;
+  if (finePointer && !reduceMotion) {
+    document.documentElement.classList.add("fx-cursor");
+    window.addEventListener("pointerdown", () => cursorEl.classList.add("down"));
+    window.addEventListener("pointerup", () => cursorEl.classList.remove("down"));
+    document.addEventListener("pointerover", (e) => {
+      cursorEl.classList.toggle("link", !!e.target.closest("a, button"));
+    });
+  }
+
   /* =========================================================
-     6. Render loop
+     7. Render loop
      ========================================================= */
-  // Ink colour rgb(236,235,230) packed as little-endian ABGR (alpha added per pixel)
-  const BASE = (230 << 16) | (235 << 8) | 236;
+  const INK = (230 << 16) | (235 << 8) | 236; // rgb(236,235,230), little-endian
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const SPRING = 0.035, DAMP = 0.88;
+  let lastScrollPx = 0, lastNow = 0, emaDt = 16, slowFrames = 0;
 
   const frame = (now) => {
+    // adaptive quality: thin the dust if the device can't keep up
+    const dtMs = lastNow ? now - lastNow : 16;
+    lastNow = now;
+    if (dtMs < 200) emaDt += (dtMs - emaDt) * 0.05;
+    if (emaDt > 27 && step < 3 && ++slowFrames > 90) { step++; slowFrames = 0; emaDt = 16; }
+
     const elapsed = now - tStart;
     const transitioning = elapsed < DUR;
     const inHome = mode === "home";
 
-    // ----- graph rotation + node screen positions -----
-    if (!dragging) velY += (baseSpin - velY) * 0.02;
-    rotY += velY;
+    if (!dragging) spin += (baseSpin - spin) * 0.02;
+    rotY += spin;
     tiltX += (targetTiltX - tiltX) * 0.05;
     tiltY += (targetTiltY - tiltY) * 0.05;
 
+    // ----- graph camera -----
     const cyA = Math.cos(rotY + tiltY), syA = Math.sin(rotY + tiltY);
     const cxA = Math.cos(rotX + tiltX), sxA = Math.sin(rotX + tiltX);
     const size = Math.min(stageBox.w, stageBox.h) || Math.min(W, H) / dpr;
@@ -318,23 +464,22 @@
     const camD = 3.2;
     const gcx = (stageBox.x + stageBox.w / 2) * dpr;
     const gcy = (stageBox.y + stageBox.h / 2) * dpr;
-
-    const project = (x, y, z, out) => {
+    const tmp = [0, 0, 0, 0];
+    const project = (x, y, z) => {
       const x1 = x * cyA + z * syA;
       const z1 = -x * syA + z * cyA;
       const y1 = y * cxA - z1 * sxA;
       const z2 = y * sxA + z1 * cxA;
       const f = camD / (camD + z2);
-      out[0] = gcx + x1 * f * scale;
-      out[1] = gcy + y1 * f * scale;
-      out[2] = z2;
-      out[3] = f;
+      tmp[0] = gcx + x1 * f * scale;
+      tmp[1] = gcy + y1 * f * scale;
+      tmp[2] = z2;
+      tmp[3] = f;
     };
-    const tmp = [0, 0, 0, 0];
 
     if (inHome) {
       nodes.forEach((n, ni) => {
-        project(n.p[0], n.p[1], n.p[2], tmp);
+        project(n.p[0], n.p[1], n.p[2]);
         const s = nodeScr[ni];
         s.x = tmp[0]; s.y = tmp[1]; s.z = tmp[2]; s.r = n.r * tmp[3] * scale;
       });
@@ -351,7 +496,7 @@
 
     // ----- labels -----
     if (inHome) {
-      const labelsShow = !transitioning || elapsed > DUR * 0.6;
+      const labelsShow = elapsed > DUR * 0.6;
       PAGE_NODES.forEach((ni, pi) => {
         const s = nodeScr[ni], el = labels[pi];
         const lx = s.x / dpr - stageBox.x, ly = s.y / dpr - stageBox.y;
@@ -366,18 +511,67 @@
       });
     }
 
-    // ----- particles -----
-    acc.fill(0);
-    const mR = Math.min(W, H) * 0.1, mR2 = mR * mR;
+    // ----- cursor + progress -----
+    if (cursorEl && finePointer) {
+      ringX += (mouse.cx - ringX) * 0.2;
+      ringY += (mouse.cy - ringY) * 0.2;
+      cursorEl.style.transform = `translate(${ringX.toFixed(1)}px, ${ringY.toFixed(1)}px)`;
+      dotEl.style.transform = `translate(${mouse.cx}px, ${mouse.cy}px)`;
+      cursorEl.classList.toggle("on", mouse.active);
+      dotEl.classList.toggle("on", mouse.active);
+      cursorEl.classList.toggle("node", hovered >= 0);
+    }
+    if (!inHome) {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      progressEl.style.transform = `scaleX(${max > 0 ? Math.min(1, window.scrollY / max) : 0})`;
+    }
+
+    // ----- sculpture camera (page mode) -----
+    const wide = W / dpr > 820;
     const scrollPx = window.scrollY * dpr;
+    const dScroll = scrollPx - lastScrollPx;
+    lastScrollPx = scrollPx;
+    const sa = now * 0.00024 + tiltY * 1.4, sb = 0.38 + tiltX * 0.9;
+    const scY = Math.cos(sa), ssY = Math.sin(sa), scX = Math.cos(sb), ssX = Math.sin(sb);
+    const sax = W * (wide ? 0.74 : 0.5);
+    const say = H * (wide ? 0.6 : 0.64) - scrollPx * 0.15;
+    const sR = Math.min(W, H) * (wide ? 0.36 : 0.4);
+
+    // ----- let the live demo advance its simulation -----
+    if (demo && !inHome) {
+      demoApi.snap = transitioning || reduceMotion;
+      demoApi.busy = transitioning; // page is still forming: demos wait to start
+      demoApi.scroll = scrollPx;
+      demo.tick(now);
+    }
+
+    // ----- active shockwaves -----
+    for (let w = waves.length - 1; w >= 0; w--) if (now - waves[w].t0 > 1100) waves.splice(w, 1);
+    const nW = waves.length;
+    const band = 70 * dpr;
+    const waveR = [], waveP = [];
+    for (let w = 0; w < nW; w++) {
+      const age = (now - waves[w].t0) / 1100;
+      waveR.push(age * Math.hypot(W, H) * 0.75);
+      waveP.push(waves[w].power * (1 - age) * 3.4 * dpr);
+    }
+
+    acc.fill(0);
+    const mR = Math.min(W, H) * 0.11, mR2 = mR * mR;
+    const mActive = mouse.active && !reduceMotion;
+    const comp = step === 1 ? 0.55 : step === 2 ? 0.9 : 1.2;
     const dotSize = dpr >= 1.3 ? 2 : 1;
     const t = now * 0.0003;
+    const tw = now * 0.002;
+    const heatScale = 1 / (7 * dpr);
+    const scrollKick = !inHome && !transitioning && dScroll !== 0 && Math.abs(dScroll) < 400 * dpr;
 
-    for (let i = 0; i < N; i++) {
-      let tx, ty, tb;
+    for (let i = 0; i < N; i += step) {
+      // --- where this particle wants to be ---
+      let tx, ty, tb, glow = 0;
       if (inHome) {
         const o = i * 4;
-        project(P[o], P[o + 1], P[o + 2], tmp);
+        project(P[o], P[o + 1], P[o + 2]);
         tx = tmp[0]; ty = tmp[1];
         const depth = 0.35 + 0.65 * Math.min(1, Math.max(0, (1.3 - tmp[2]) / 2.6));
         tb = P[o + 3] * depth;
@@ -387,18 +581,36 @@
           tx = s.x + (tx - s.x) * (1 + 0.28 * k);
           ty = s.y + (ty - s.y) * (1 + 0.28 * k);
           tb *= 1 + 0.9 * k;
+          glow = k * 0.75;
         }
-      } else if (bgDust[i]) {
-        const ph = delay[i] * 40;
-        tx = tgt[i * 2] + Math.sin(t + ph) * 8 * dpr;
-        ty = tgt[i * 2 + 1] + Math.cos(t * 1.3 + ph) * 8 * dpr;
-        tb = tgtB[i];
       } else {
-        tx = tgt[i * 2];
-        ty = tgt[i * 2 + 1] - scrollPx;
-        tb = tgtB[i];
+        const kd = kind[i];
+        if (kd === 0) {
+          tx = tgt[i * 2];
+          ty = tgt[i * 2 + 1] - scrollPx + Math.sin(tw + tx * 0.006) * 1.6 * dpr;
+          tb = tgtB[i];
+        } else if (kd === 1) {
+          const o3 = i * 3;
+          const X = S3[o3], Y = S3[o3 + 1], Z = S3[o3 + 2];
+          const x1 = X * scY + Z * ssY, z1 = -X * ssY + Z * scY;
+          const y1 = Y * scX - z1 * ssX, z2 = Y * ssX + z1 * scX;
+          const f = 3.2 / (3.2 + z2);
+          tx = sax + x1 * f * sR;
+          ty = say + y1 * f * sR;
+          tb = tgtB[i] * (0.4 + 0.6 * Math.min(1, Math.max(0, (1.2 - z2) / 2.4)));
+        } else if (kd === 3) {
+          tx = tgt[i * 2];
+          ty = tgt[i * 2 + 1] - scrollPx;
+          tb = tgtB[i];
+        } else {
+          const ph = delay[i] * 40;
+          tx = tgt[i * 2] + Math.sin(t + ph) * 8 * dpr;
+          ty = tgt[i * 2 + 1] + Math.cos(t * 1.3 + ph) * 8 * dpr;
+          tb = tgtB[i];
+        }
       }
 
+      // --- morph between layouts ---
       let x, y, b;
       if (transitioning) {
         let l = (elapsed / DUR - delay[i] * 0.4) / 0.6;
@@ -407,45 +619,147 @@
         const sx = start[i * 2], sy = start[i * 2 + 1];
         const dx = tx - sx, dy = ty - sy;
         const len = Math.hypot(dx, dy) || 1;
-        const sw = Math.sin(Math.PI * e) * swirl[i] * Math.min(160 * dpr, len * 0.35);
+        const arc = Math.sin(Math.PI * e);
+        const sw = arc * swirl[i] * Math.min(170 * dpr, len * 0.38);
         x = sx + dx * e - (dy / len) * sw;
         y = sy + dy * e + (dx / len) * sw;
         b = startB[i] + (tb - startB[i]) * e;
+        glow += arc * 0.65;
       } else {
         x = tx; y = ty; b = tb;
       }
       cur[i * 2] = x; cur[i * 2 + 1] = y; curB[i] = b;
 
-      // cursor pushes dust away
-      if (mouse.active) {
-        const dx = x - mouse.x, dy = y - mouse.y;
+      // --- springy physics: cursor wake, shockwaves, scroll smear ---
+      let ox = offX[i], oy = offY[i], vx = velX[i], vy = velY2[i];
+      let forced = false;
+      if (mActive) {
+        const dx = x + ox - mouse.x, dy = y + oy - mouse.y;
         const d2 = dx * dx + dy * dy;
         if (d2 < mR2 && d2 > 0.01) {
           const d = Math.sqrt(d2);
-          const push = (1 - d / mR) ** 2 * mR * 0.45;
-          x += (dx / d) * push;
-          y += (dy / d) * push;
+          const f = (1 - d / mR) ** 2 * 1.7 * dpr;
+          vx += (dx / d) * f; vy += (dy / d) * f;
+          forced = true;
         }
       }
+      for (let w = 0; w < nW; w++) {
+        const dx = x - waves[w].x, dy = y - waves[w].y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const diff = Math.abs(d - waveR[w]);
+        if (diff < band) {
+          const imp = (1 - diff / band) * waveP[w];
+          vx += (dx / d) * imp; vy += (dy / d) * imp;
+          forced = true;
+        }
+      }
+      if (scrollKick && kind[i] === 0) { oy += dScroll * delay[i] * 0.55; forced = true; }
+      if (forced || ox !== 0 || oy !== 0 || vx !== 0 || vy !== 0) {
+        vx = (vx - ox * SPRING) * DAMP;
+        vy = (vy - oy * SPRING) * DAMP;
+        ox += vx; oy += vy;
+        if (!forced && Math.abs(ox) + Math.abs(oy) + Math.abs(vx) + Math.abs(vy) < 0.05) { ox = oy = vx = vy = 0; }
+        offX[i] = ox; offY[i] = oy; velX[i] = vx; velY2[i] = vy;
+        glow += (Math.abs(vx) + Math.abs(vy)) * heatScale;
+        x += ox; y += oy;
+      }
 
+      // --- draw ---
       const px = x | 0, py = y | 0;
       if (px < 0 || py < 0 || px >= W - 1 || py >= H - 1) continue;
-      const a = b * 0.55;
+      if (glow > 1) glow = 1;
+      const a = b * comp * (1 + glow * 0.9);
       const k = py * W + px;
       acc[k] += a;
       if (dotSize === 2) { acc[k + 1] += a * 0.5; acc[k + W] += a * 0.5; }
     }
 
+    // ----- data pulses running along edges (home only) -----
+    if (inHome && elapsed > DUR * 0.8) {
+      const fade = Math.min(1, (elapsed - DUR * 0.8) / 600);
+      for (const pl of pulses) {
+        pl.p += pl.s;
+        if (pl.p >= 1) {
+          const opts = adj[pl.b].filter((n) => n !== pl.a);
+          const next = opts.length ? opts[(Math.random() * opts.length) | 0] : pl.a;
+          pl.a = pl.b; pl.b = next; pl.p = 0;
+          pl.s = 0.006 + Math.random() * 0.008;
+        }
+        const A = nodes[pl.a].p, B = nodes[pl.b].p;
+        for (let tr = 0; tr < 6; tr++) {
+          const p = pl.p - tr * 0.025;
+          if (p < 0) break;
+          project(A[0] + (B[0] - A[0]) * p, A[1] + (B[1] - A[1]) * p, A[2] + (B[2] - A[2]) * p);
+          const rad = (3.2 - tr * 0.35) * dpr * tmp[3];
+          const al = 0.7 * fade * (1 - tr / 6);
+          for (let j = 0; j < 46; j++) {
+            const px = (tmp[0] + (Math.random() + Math.random() - 1) * rad) | 0;
+            const py = (tmp[1] + (Math.random() + Math.random() - 1) * rad) | 0;
+            if (px < 0 || py < 0 || px >= W || py >= H) continue;
+            const k = py * W + px;
+            acc[k] += al;
+          }
+        }
+      }
+    }
+
+    // ----- write pixels: one ink colour, brightness only -----
     for (let i = 0; i < acc.length; i++) {
       const v = acc[i];
-      buf[i] = v > 0 ? ((Math.min(255, v * 255) << 24) >>> 0) | BASE : 0;
+      buf[i] = v > 0 ? (((v * 255 > 255 ? 255 : v * 255) << 24) | INK) >>> 0 : 0;
     }
     ctx.putImageData(img, 0, 0);
     requestAnimationFrame(frame);
   };
 
   /* =========================================================
-     7. Router (#/about, #/projects, …)
+     8. Page-entry effects: heading scramble + stat count-up
+     ========================================================= */
+  const GLYPHS = "ΣΔπλ∫∂01<>/#*+=";
+  const scramble = (el, frames = 28) => {
+    if (reduceMotion || el._scrambling) return;
+    const final = el.dataset.final || (el.dataset.final = el.textContent);
+    el._scrambling = true;
+    let f = 0;
+    const tick = () => {
+      el.textContent = final
+        .split("")
+        .map((ch, i) => (ch === " " ? " " : f / frames > i / final.length ? ch : GLYPHS[(Math.random() * GLYPHS.length) | 0]))
+        .join("");
+      if (++f <= frames) requestAnimationFrame(tick);
+      else { el.textContent = final; el._scrambling = false; }
+    };
+    tick();
+  };
+
+  const countUp = (el) => {
+    const final = el.dataset.final || (el.dataset.final = el.textContent);
+    const m = final.match(/^(.*?)([\d,]+(?:\.\d+)?)(.*)$/);
+    if (!m || reduceMotion) return;
+    const [, pre, numStr, post] = m;
+    const target = parseFloat(numStr.replace(/,/g, ""));
+    const decimals = (numStr.split(".")[1] || "").length;
+    const commas = numStr.includes(",");
+    const t0 = performance.now(), dur = 1300;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      const v = target * (1 - Math.pow(1 - p, 4));
+      let s = v.toFixed(decimals);
+      if (commas) s = Number(s).toLocaleString("en-US");
+      el.textContent = pre + s + post;
+      if (p < 1) requestAnimationFrame(tick);
+      else el.textContent = final;
+    };
+    requestAnimationFrame(tick);
+  };
+
+  const pageFx = (page) => {
+    page.querySelectorAll("h3").forEach((h, i) => setTimeout(() => scramble(h), i * 110));
+    page.querySelectorAll("[data-count]").forEach((el, i) => setTimeout(() => countUp(el), 150 + i * 90));
+  };
+
+  /* =========================================================
+     9. Router (#/about, #/projects, …)
      ========================================================= */
   const sections = {};
   document.querySelectorAll(".page").forEach((s) => (sections[s.dataset.page] = s));
@@ -460,12 +774,26 @@
       s.classList.remove("shown");
     });
     activePage = sections[id];
+    if (demo) { demo.destroy(); demo = null; }
+    const makeDemo = window.DEMOS && window.DEMOS[id];
+    if (makeDemo) {
+      demo = makeDemo(demoApi, {
+        stage: activePage.querySelector("[data-stage]"),
+        controls: activePage.querySelector("[data-controls]"),
+        readout: activePage.querySelector("[data-readout]"),
+      });
+    }
     window.scrollTo(0, 0);
+    lastScrollPx = 0;
     layoutPage();
     begin("page");
     clearTimeout(showTimer);
-    showTimer = setTimeout(() => activePage && activePage.classList.add("shown"), reduceMotion ? 0 : 950);
-    barLinks.forEach((a) => a.classList.toggle("active", a.dataset.link === id));
+    showTimer = setTimeout(() => {
+      if (!activePage) return;
+      activePage.classList.add("shown");
+      pageFx(activePage);
+    }, reduceMotion ? 0 : 950);
+    barLinks.forEach((a) => a.classList.toggle("active", a.dataset.link === id.split("/")[0]));
     document.title = `${activePage.dataset.title} — Dhruv Khemka`;
   };
 
@@ -475,6 +803,7 @@
     body.classList.add("mode-home");
     Object.values(sections).forEach((s) => { s.hidden = true; s.classList.remove("shown"); });
     activePage = null;
+    if (demo) { demo.destroy(); demo = null; }
     window.scrollTo(0, 0);
     measureStage();
     begin("home");
@@ -490,9 +819,15 @@
   window.addEventListener("hashchange", route);
   window.addEventListener("resize", resize);
 
+  // Big bang: all dust starts as one bright point, then expands into the graph
   resize();
-  scatter();
-  begin("home"); // dust assembles into the graph on load
+  const bx = (stageBox.x + stageBox.w / 2) * dpr, by = (stageBox.y + stageBox.h / 2) * dpr;
+  for (let i = 0; i < N; i++) {
+    cur[i * 2] = bx + (Math.random() - 0.5) * 6 * dpr;
+    cur[i * 2 + 1] = by + (Math.random() - 0.5) * 6 * dpr;
+    curB[i] = 0.9;
+  }
+  begin("home");
   requestAnimationFrame(frame);
   (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
     measureStage();
@@ -500,7 +835,7 @@
   });
 
   /* =========================================================
-     8. Ticker
+     10. Ticker
      ========================================================= */
   const ticks = [
     ["NYU·GPA", "3.79", "Dean’s List"],
@@ -519,35 +854,45 @@
   document.getElementById("ticker").innerHTML = tickHTML + tickHTML;
 
   /* =========================================================
-     9. Name scramble
+     11. Wordmark scramble (on load and on hover)
      ========================================================= */
   const word = document.querySelector("[data-scramble]");
-  if (word && !reduceMotion) {
-    const final = word.textContent;
-    const glyphs = "ΣΔπλ∫∂01<>/#*+=";
-    let f = 0;
-    const total = 36;
-    const step = () => {
-      word.textContent = final
-        .split("")
-        .map((ch, i) => (ch === " " ? " " : f / total > i / final.length ? ch : glyphs[(Math.random() * glyphs.length) | 0]))
-        .join("");
-      if (++f <= total) requestAnimationFrame(step);
-      else word.textContent = final;
-    };
-    step();
+  if (word) {
+    scramble(word, 40);
+    word.addEventListener("pointerenter", () => scramble(word, 22));
   }
 
   /* =========================================================
-     10. Card spotlights
+     12. Cards: cursor spotlight + 3D tilt · magnetic links
      ========================================================= */
   document.querySelectorAll(".card").forEach((card) => {
     card.addEventListener("pointermove", (e) => {
       const r = card.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
       card.style.setProperty("--mx", `${e.clientX - r.left}px`);
       card.style.setProperty("--my", `${e.clientY - r.top}px`);
+      if (finePointer && !reduceMotion) {
+        card.style.setProperty("--ry", `${((px - 0.5) * 7).toFixed(2)}deg`);
+        card.style.setProperty("--rx", `${((0.5 - py) * 7).toFixed(2)}deg`);
+      }
+    });
+    card.addEventListener("pointerleave", () => {
+      card.style.setProperty("--rx", "0deg");
+      card.style.setProperty("--ry", "0deg");
     });
   });
+
+  if (finePointer && !reduceMotion) {
+    document.querySelectorAll(".hero-nav a, .next, .home-link, .pagebar-links a").forEach((el) => {
+      el.classList.add("magnetic");
+      el.addEventListener("pointermove", (e) => {
+        const r = el.getBoundingClientRect();
+        const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+        el.style.translate = `${(dx * 0.3).toFixed(1)}px ${(dy * 0.4).toFixed(1)}px`;
+      });
+      el.addEventListener("pointerleave", () => (el.style.translate = "0px 0px"));
+    });
+  }
 
   document.getElementById("year").textContent = new Date().getFullYear();
 })();

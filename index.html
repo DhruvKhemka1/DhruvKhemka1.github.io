@@ -13,6 +13,9 @@
 <body>
   <canvas id="dust" aria-hidden="true"></canvas>
   <div class="grain" aria-hidden="true"></div>
+  <div class="progress" aria-hidden="true"></div>
+  <div class="cursor" aria-hidden="true"></div>
+  <div class="cursor-dot" aria-hidden="true"></div>
 
   <!-- ============ HOME ============ -->
   <header class="hero" id="home">
@@ -23,7 +26,7 @@
 
     <div class="hero-stage" id="stage">
       <div class="node-labels" id="labels"></div>
-      <p class="hint mono small muted">Click a node to explore · drag to spin</p>
+      <p class="hint mono small muted">Click a node · drag to spin · click space to blast</p>
     </div>
 
     <div class="hero-copy">
@@ -63,7 +66,7 @@
       <div class="title-slot" aria-hidden="true"></div>
       <h2 class="sr-only">About</h2>
       <div class="page-body">
-        <div class="about-grid">
+        <div class="about-grid stagger">
           <p class="lead">
             I study <em>Mathematics and Computer Science</em> at NYU Tandon. I like problems where a clean
             piece of math turns into fast, correct code: matching engines, sorting algorithms that learn
@@ -77,7 +80,7 @@
             <h3>New York University</h3>
             <p class="muted">Tandon School of Engineering · B.S. Mathematics &amp; Computer Science</p>
             <div class="stats">
-              <div><span class="stat">3.79</span><span class="mono small muted">GPA / 4.00</span></div>
+              <div><span class="stat" data-count>3.79</span><span class="mono small muted">GPA / 4.00</span></div>
               <div><span class="stat">’25–26</span><span class="mono small muted">Dean’s List</span></div>
             </div>
             <p class="small muted">Data Structures &amp; Algorithms · OOP (C++) · Discrete Math · Probability · Linear Algebra · Differential Equations</p>
@@ -92,7 +95,7 @@
       <div class="title-slot" aria-hidden="true"></div>
       <h2 class="sr-only">Experience</h2>
       <div class="page-body">
-        <ol class="timeline">
+        <ol class="timeline stagger">
           <li>
             <div class="when mono">Sep 2026 — Present</div>
             <div class="what">
@@ -135,7 +138,7 @@
       <div class="title-slot" aria-hidden="true"></div>
       <h2 class="sr-only">Projects</h2>
       <div class="page-body">
-        <div class="projects">
+        <div class="projects stagger">
           <article class="card project">
             <div class="project-head">
               <span class="mono small muted">P/01</span>
@@ -146,10 +149,11 @@
             <div class="metrics">
               <div><span class="stat">O(log n)</span><span class="mono small muted">best price</span></div>
               <div><span class="stat">O(1)</span><span class="mono small muted">cancel</span></div>
-              <div><span class="stat">1,000</span><span class="mono small muted">randomized test runs</span></div>
+              <div><span class="stat" data-count>1,000</span><span class="mono small muted">randomized test runs</span></div>
             </div>
             <p class="small muted">Price levels are dicts of deques with heaps over bid/ask prices; cancels use lazy deletion. Verified against a brute-force reference book on 1,000 randomized 200-message sequences.</p>
             <div class="tags"><span>Python</span><span>heapq</span><span>collections</span><span>pytest</span></div>
+            <a class="run-demo" href="#/projects/orderbook">▶ Run it live</a>
           </article>
 
           <article class="card project">
@@ -160,12 +164,13 @@
             <h3>Expected Linear-Time Distribution Sort</h3>
             <p>A sort that buckets values by a CDF fit to a random sample — uniform, normal or exponential via a Kolmogorov–Smirnov test, else an empirical CDF.</p>
             <div class="metrics">
-              <div><span class="stat up">3.6×</span><span class="mono small muted">vs merge sort</span></div>
+              <div><span class="stat up" data-count>3.6×</span><span class="mono small muted">vs merge sort</span></div>
               <div><span class="stat">O(n)</span><span class="mono small muted">expected</span></div>
-              <div><span class="stat">405K</span><span class="mono small muted">real file records</span></div>
+              <div><span class="stat" data-count>405K</span><span class="mono small muted">real file records</span></div>
             </div>
             <p class="small muted">2.0–3.6× faster than merge sort on 1M generated values and up to 2.7× on real macOS file records. Heavy duplicates erase the gain; output verified against <code>sorted()</code>.</p>
             <div class="tags"><span>Python</span><span>statistics</span><span>bisect</span></div>
+            <a class="run-demo" href="#/projects/sort">▶ Run it live</a>
           </article>
 
           <article class="card project">
@@ -185,9 +190,58 @@
             </div>
             <p class="small muted">Crossovers detected by differencing a short-above-long indicator series; unit tested on synthetic price data.</p>
             <div class="tags"><span>Python</span><span>pandas</span><span>yfinance</span><span>Matplotlib</span></div>
+            <a class="run-demo" href="#/projects/crossover">▶ Run it live</a>
           </article>
         </div>
         <a class="next" href="#/toolkit">Next: Toolkit →</a>
+      </div>
+    </section>
+
+    <!-- DEMO: Order Book -->
+    <section class="page demo" data-page="projects/orderbook" data-title="Order Book" hidden>
+      <div class="title-slot" aria-hidden="true"></div>
+      <h2 class="sr-only">Limit Order Book — live demo</h2>
+      <div class="page-body">
+        <p class="demo-intro">A working matching engine, drawn in dust. Orders arrive on their own and fill by <em>price-time priority</em>: best price first, oldest order first. Click left of a price to place a bid, right to place an ask, and watch crossing orders trade.</p>
+        <div class="demo-stage" data-stage></div>
+        <div class="demo-controls" data-controls></div>
+        <div class="demo-readout mono small" data-readout></div>
+        <div class="demo-foot">
+          <a class="next" href="#/projects">← All projects</a>
+          <a class="next" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener">Source on GitHub ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- DEMO: Sort Race -->
+    <section class="page demo" data-page="projects/sort" data-title="Sort Race" hidden>
+      <div class="title-slot" aria-hidden="true"></div>
+      <h2 class="sr-only">Distribution sort versus merge sort — live demo</h2>
+      <div class="page-body">
+        <p class="demo-intro">The distribution sort samples the data, fits a CDF with a <em>Kolmogorov–Smirnov test</em>, and drops every value straight into its bucket. Merge sort has to keep comparing. Same data, same budget of operations per tick.</p>
+        <div class="demo-stage" data-stage></div>
+        <div class="demo-controls" data-controls></div>
+        <div class="demo-readout mono small" data-readout></div>
+        <div class="demo-foot">
+          <a class="next" href="#/projects">← All projects</a>
+          <a class="next" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener">Source on GitHub ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- DEMO: Crossover -->
+    <section class="page demo" data-page="projects/crossover" data-title="Crossover" hidden>
+      <div class="title-slot" aria-hidden="true"></div>
+      <h2 class="sr-only">Moving-average crossover — live demo</h2>
+      <div class="page-body">
+        <p class="demo-intro">The analyzer scans a price series, tracks a short and a long <em>simple moving average</em>, and flags every golden and death cross. Drag the sliders to change the windows.</p>
+        <div class="demo-stage" data-stage></div>
+        <div class="demo-controls" data-controls></div>
+        <div class="demo-readout mono small" data-readout></div>
+        <div class="demo-foot">
+          <a class="next" href="#/projects">← All projects</a>
+          <a class="next" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener">Source on GitHub ↗</a>
+        </div>
       </div>
     </section>
 
@@ -196,7 +250,7 @@
       <div class="title-slot" aria-hidden="true"></div>
       <h2 class="sr-only">Toolkit &amp; Recognition</h2>
       <div class="page-body">
-        <div class="two-col">
+        <div class="two-col stagger">
           <div class="card">
             <h3>Technical skills</h3>
             <dl class="skills">
@@ -208,9 +262,9 @@
           <div class="card">
             <h3>Awards &amp; leadership</h3>
             <ul class="awards">
-              <li><span class="stat sm">AIR 512</span><span>JEE Advanced <em class="muted">· JEE Main AIR 2114</em></span></li>
+              <li><span class="stat sm" data-count>AIR 512</span><span>JEE Advanced <em class="muted">· JEE Main AIR 2114</em></span></li>
               <li><span class="stat sm">Gold</span><span>SOF International Mathematics Olympiad <em class="muted">· Zonal Rank 3</em></span></li>
-              <li><span class="stat sm">50+</span><span>President, Excelomatics Math Club <em class="muted">· workshops &amp; inter-school competitions</em></span></li>
+              <li><span class="stat sm" data-count>50+</span><span>President, Excelomatics Math Club <em class="muted">· workshops &amp; inter-school competitions</em></span></li>
               <li><span class="stat sm">♞ ×3</span><span>Captain, School Chess Team <em class="muted">· City, District &amp; State titles</em></span></li>
             </ul>
           </div>
@@ -225,7 +279,7 @@
       <h2 class="sr-only">Contact</h2>
       <div class="page-body">
         <p class="big">Let’s build something <span class="muted">precise.</span></p>
-        <div class="contact-links">
+        <div class="contact-links stagger">
           <a href="mailto:dk5230@nyu.edu">dk5230@nyu.edu</a>
           <a href="https://www.linkedin.com/in/dhruv-khemka" target="_blank" rel="noopener">LinkedIn ↗</a>
           <a href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener">GitHub ↗</a>
@@ -237,10 +291,12 @@
 
     <footer class="footer mono small muted">
       <span>© <span id="year"></span> Dhruv Khemka</span>
+      <span class="keys">Keys: 1–5 pages · ← → · Esc home</span>
       <a href="#/">Home ↺</a>
     </footer>
   </main>
 
+  <script src="demos.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

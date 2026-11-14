@@ -104,6 +104,74 @@
   const nodeOf = Int8Array.from(owner);
   const N = nodeOf.length;
 
+  /* ---- Graph levels: the root graph, and the smaller graph inside its Projects node ---- */
+  const makeGraph = (g) => Object.assign(g, {
+    adj: (() => { const a = g.nodes.map(() => []); g.edges.forEach(([x, y]) => { a[x].push(y); a[y].push(x); }); return a; })(),
+    nodeScr: g.nodes.map(() => ({ x: 0, y: 0, r: 0, z: 0 })),
+    hoverAmt: new Float32Array(g.nodes.length),
+    pulses: null,
+  });
+  // Spread the same N grains over a different graph, so one level can morph into the next
+  const buildGraphDust = (gNodes, gEdges, gPageNodes) => {
+    const parts = [];
+    gNodes.forEach((n, ni) => parts.push({ w: n.r * n.r * 230000 + 250, f: () => {
+      const d = randDir(), rr = n.r * (0.82 + 0.18 * Math.sqrt(rand()));
+      return [n.p[0] + d[0] * rr, n.p[1] + d[1] * rr, n.p[2] + d[2] * rr, 0.35 + rand() * 0.65, ni];
+    } }));
+    gEdges.forEach(([a, b]) => {
+      const A = gNodes[a].p, B = gNodes[b].p;
+      parts.push({ w: Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2]) * 1400, f: () => {
+        const t = rand(), sd = 0.011;
+        return [A[0] + (B[0] - A[0]) * t + gauss() * sd, A[1] + (B[1] - A[1]) * t + gauss() * sd, A[2] + (B[2] - A[2]) * t + gauss() * sd, 0.3 + rand() * 0.7, -1];
+      } });
+    });
+    gPageNodes.forEach((idx) => {
+      const n = gNodes[idx], R = n.r * 1.7, tilt = 0.5 + rand() * 0.9, sp = rand() * Math.PI;
+      parts.push({ w: 900, f: () => {
+        const t = rand() * Math.PI * 2, x = Math.cos(t) * R, z = Math.sin(t) * R;
+        const y1 = -z * Math.sin(tilt), z1 = z * Math.cos(tilt);
+        return [n.p[0] + x * Math.cos(sp) + z1 * Math.sin(sp), n.p[1] + y1, n.p[2] - x * Math.sin(sp) + z1 * Math.cos(sp), 0.4 + rand() * 0.6, idx];
+      } });
+    });
+    parts.push({ w: 9000, f: () => { const d = randDir(), r = 0.5 + rand() * 1.5; return [d[0] * r, d[1] * r, d[2] * r, 0.08 + rand() * 0.2, -1]; } });
+    const total = parts.reduce((a, p) => a + p.w, 0);
+    const P2 = new Float32Array(N * 4), own = new Int8Array(N);
+    let k = 0, accW = parts[0].w;
+    for (let i = 0; i < N; i++) {
+      const u = ((i + 0.5) / N) * total;
+      while (u > accW && k < parts.length - 1) accW += parts[++k].w;
+      const v = parts[k].f();
+      P2[i * 4] = v[0]; P2[i * 4 + 1] = v[1]; P2[i * 4 + 2] = v[2]; P2[i * 4 + 3] = v[3]; own[i] = v[4];
+    }
+    return { P: P2, nodeOf: own };
+  };
+
+  const subNodes = [
+    { p: [-0.78, -0.3, 0.12], r: 0.2 }, { p: [0.8, -0.22, -0.18], r: 0.2 }, { p: [0.02, 0.72, 0.2], r: 0.2 },
+    { p: [0, 0.02, 0], r: 0.075 }, { p: [0.12, -0.3, -0.75], r: 0.06 }, { p: [-0.25, 0.1, 0.8], r: 0.065 },
+    { p: [0.55, 0.55, -0.45], r: 0.055 }, { p: [-0.6, 0.5, -0.35], r: 0.06 },
+  ];
+  const subEdges = [[0, 1], [1, 2], [2, 0], [3, 0], [3, 1], [3, 2], [4, 0], [4, 1], [5, 0], [5, 2], [6, 1], [6, 2], [7, 0], [7, 2], [4, 3], [5, 3]];
+  const GRAPHS = {
+    "": makeGraph({
+      id: "", parent: null, nodes, edges, pageNodes: PAGE_NODES, pages: PAGES, P, nodeOf,
+      heading: "Dhruv Khemka", tagline: "Algorithms, probability & markets.",
+      hint: "Scroll into a node · drag to spin",
+    }),
+    projects: makeGraph({
+      id: "projects", parent: "", nodes: subNodes, edges: subEdges, pageNodes: [0, 1, 2],
+      pages: [
+        { id: "projects/orderbook", title: "Order Book" },
+        { id: "projects/sort", title: "Sort Race" },
+        { id: "projects/crossover", title: "Crossover" },
+      ],
+      ...buildGraphDust(subNodes, subEdges, [0, 1, 2]),
+      heading: "Projects", tagline: "Three builds. Scroll into one to run it live.",
+      hint: "Scroll into a project · scroll out to go back",
+    }),
+  };
+  let G = GRAPHS[""]; // the graph level currently on screen
+
   // Per-particle state
   const cur = new Float32Array(N * 2), start = new Float32Array(N * 2);
   const curB = new Float32Array(N), startB = new Float32Array(N);
@@ -320,9 +388,15 @@
   const mouse = { x: -9999, y: -9999, cx: -100, cy: -100, active: false };
   let dragging = false, moved = 0, lastX = 0, lastY = 0;
   let hovered = -1, labelHover = -1;
-  const hoverAmt = new Float32Array(nodes.length);
-  const nodeScr = nodes.map(() => ({ x: 0, y: 0, r: 0, z: 0 }));
   const waves = [];
+
+  // Zoom camera. zl is log-zoom: 0 = normal, ZIN = inside the focused node, ZOUT = far enough out to leave this level
+  const ZIN = Math.log(13), ZOUT = -1.5;
+  let zl = 0, zlT = 0, zRate = 0.16, focus = -1, lastWheel = 0;
+  let pending = null;      // page we are diving toward (set by a click or link)
+  let entering = false;    // a level change has been requested and not yet routed
+  let skipDive = false;    // the dive already happened; open the page straight away
+  let outAmt = 0;          // 0..1 progress of "scroll up at the top" on a page
 
   const toCanvas = (cx, cy) => [cx * (W / (canvas.clientWidth || 1)), cy * (H / (canvas.clientHeight || 1))];
   const blast = (x, y, power = 1) => {
@@ -333,8 +407,8 @@
 
   const hit = (x, y) => {
     let best = -1, bestZ = Infinity;
-    PAGE_NODES.forEach((n, pi) => {
-      const s = nodeScr[n];
+    G.pageNodes.forEach((n, pi) => {
+      const s = G.nodeScr[n];
       const d = Math.hypot(x - s.x, y - s.y);
       if (d < Math.max(s.r * 1.5, 22 * dpr) && s.z < bestZ) { best = pi; bestZ = s.z; }
     });
@@ -380,7 +454,7 @@
       moved = 0;
       if (wasDrag) return;
       const p = hit(x, y);
-      if (p >= 0) { blast(x, y, 0.7); location.hash = "#/" + PAGES[p].id; return; }
+      if (p >= 0) { location.hash = "#/" + G.pages[p].id; return; }
     }
     blast(x, y, 1);
   });
@@ -391,32 +465,84 @@
     if (e.target.closest && e.target.closest("input")) return;
     const idx = activePage ? PAGES.findIndex((p) => p.id === activePage.dataset.page.split("/")[0]) : -1;
     if (e.key >= "1" && e.key <= "5") location.hash = "#/" + PAGES[+e.key - 1].id;
-    else if (e.key === "Escape" && demo) location.hash = "#/projects";
-    else if (e.key === "Escape" || e.key === "0") location.hash = "#/";
+    else if (e.key === "Escape") location.hash = "#/" + (parentOf(currentId) || "");
+    else if (e.key === "0") location.hash = "#/";
     else if (e.key === "ArrowRight") location.hash = "#/" + PAGES[(idx + 1) % PAGES.length].id;
     else if (e.key === "ArrowLeft" && idx >= 0) location.hash = idx === 0 ? "#/" : "#/" + PAGES[idx - 1].id;
   });
 
-  // Floating labels that follow page nodes
+  // Floating labels that follow page nodes (rebuilt whenever the graph level changes)
   const labelsEl = document.getElementById("labels");
-  const labels = PAGES.map((pg, pi) => {
-    const a = document.createElement("a");
-    a.className = "node-label";
-    a.href = "#/" + pg.id;
-    a.innerHTML = `<span>0${pi + 1}</span>${pg.title}`;
-    a.addEventListener("pointerenter", () => (labelHover = pi));
-    a.addEventListener("pointerleave", () => (labelHover = -1));
-    a.addEventListener("focus", () => (labelHover = pi));
-    a.addEventListener("blur", () => (labelHover = -1));
-    labelsEl.appendChild(a);
-    return a;
-  });
+  let labels = [];
+  const buildLabels = () => {
+    labelsEl.innerHTML = "";
+    labelHover = -1;
+    labels = G.pages.map((pg, pi) => {
+      const a = document.createElement("a");
+      a.className = "node-label";
+      a.href = "#/" + pg.id;
+      a.innerHTML = `<span>0${pi + 1}</span>${pg.title}`;
+      a.addEventListener("pointerenter", () => (labelHover = pi));
+      a.addEventListener("pointerleave", () => (labelHover = -1));
+      a.addEventListener("focus", () => (labelHover = pi));
+      a.addEventListener("blur", () => (labelHover = -1));
+      labelsEl.appendChild(a);
+      return a;
+    });
+  };
 
   // Data pulses that walk the graph's edges
-  const pulses = Array.from({ length: reduceMotion ? 0 : 7 }, () => {
-    const e = edges[(Math.random() * edges.length) | 0];
+  const getPulses = (g) => g.pulses || (g.pulses = Array.from({ length: reduceMotion ? 0 : Math.min(7, g.edges.length) }, () => {
+    const e = g.edges[(Math.random() * g.edges.length) | 0];
     return { a: e[0], b: e[1], p: Math.random(), s: 0.006 + Math.random() * 0.008 };
-  });
+  }));
+
+  // Scroll = zoom. On a graph: scroll down dives into a node, scroll up backs out a level.
+  // On a page: scrolling up while already at the top backs out to the graph it came from.
+  const pickFocus = () => {
+    if (hovered >= 0) return hovered;
+    let best = 0, bestD = Infinity;
+    G.pageNodes.forEach((n, pi) => {
+      const sc = G.nodeScr[n];
+      const d = mouse.active ? Math.hypot(sc.x - mouse.x, sc.y - mouse.y) : sc.z * 1000;
+      if (d < bestD) { bestD = d; best = pi; }
+    });
+    return best;
+  };
+  const zoomBy = (d) => {
+    if (pending || entering || performance.now() - tStart < 1300) return; // also swallows trackpad momentum after a level change
+    if (d > 0 && zlT <= 0.05 && zl <= 0.08) focus = pickFocus();
+    zlT = Math.max(G.parent != null ? ZOUT * 1.08 : -0.2, Math.min(ZIN * 1.08, zlT + d));
+    zRate = 0.16;
+    lastWheel = performance.now();
+  };
+  let lastAnyWheel = 0, gestureFromTop = false;
+  window.addEventListener("wheel", (e) => {
+    // A new gesture starts after a pause. Only gestures that begin at the very top can zoom a page out,
+    // so momentum left over from scrolling up a long page never throws you out of it.
+    const tNow = performance.now();
+    if (tNow - lastAnyWheel > 160) gestureFromTop = window.scrollY <= 0;
+    lastAnyWheel = tNow;
+    if (mode === "home") {
+      e.preventDefault();
+      zoomBy(e.ctrlKey ? -e.deltaY * 0.02 : Math.max(-120, Math.min(120, e.deltaY)) * 0.0042);
+    } else if (gestureFromTop && window.scrollY <= 0 && e.deltaY < 0 && !entering && !(e.target.closest && e.target.closest("input"))) {
+      outAmt = Math.min(1, outAmt + Math.min(120, -e.deltaY) * 0.0028);
+      lastWheel = performance.now();
+      if (outAmt >= 1) { entering = true; location.hash = "#/" + (parentOf(currentId) || ""); }
+    }
+  }, { passive: false });
+  // Pinch on touch screens
+  let pinch = 0;
+  const touchDist = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  stage.addEventListener("touchstart", (e) => { if (e.touches.length === 2) { pinch = touchDist(e); dragging = false; } }, { passive: true });
+  stage.addEventListener("touchmove", (e) => {
+    if (e.touches.length !== 2 || !pinch) return;
+    const d = touchDist(e);
+    zoomBy(Math.log(d / pinch) * 1.8);
+    pinch = d;
+  }, { passive: true });
+  stage.addEventListener("touchend", () => (pinch = 0), { passive: true });
 
   // Custom cursor + scroll progress
   const cursorEl = document.querySelector(".cursor");
@@ -438,7 +564,9 @@
   const INK = (230 << 16) | (235 << 8) | 236; // rgb(236,235,230), little-endian
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
   const SPRING = 0.035, DAMP = 0.88;
-  let lastScrollPx = 0, lastNow = 0, emaDt = 16, slowFrames = 0;
+  let lastScrollPx = 0, lastNow = 0, emaDt = 16, slowFrames = 0, lastZv = 0;
+  const zmEl = document.querySelector(".zoom-meter"), zmFill = document.querySelector(".zm-fill"), zmLabel = document.querySelector(".zm-label");
+  const pagesEl = document.getElementById("pages");
 
   const frame = (now) => {
     // adaptive quality: thin the dust if the device can't keep up
@@ -451,7 +579,19 @@
     const transitioning = elapsed < DUR;
     const inHome = mode === "home";
 
-    if (!dragging) spin += (baseSpin - spin) * 0.02;
+    // ----- zoom camera -----
+    if (inHome) {
+      // time-based easing, so the dive takes the same time at any frame rate
+      const zk = Math.min(dtMs, 1000) / 16.67;
+      if (!pending && now - lastWheel > 450) zlT += (0 - zlT) * (1 - Math.pow(0.93, zk));
+      zl += (zlT - zl) * (1 - Math.pow(1 - zRate, zk));
+    } else if (outAmt > 0 && now - lastWheel > 300 && !entering) outAmt = Math.max(0, outAmt - 0.04);
+    const Zm = Math.exp(zl);
+    const zIn = Math.min(1, Math.max(0, zl / ZIN));
+    const zBoost = 1 + 0.3 * Math.max(0, zl);
+    const nodes = G.nodes, nodeScr = G.nodeScr, hoverAmt = G.hoverAmt, PAGE_NODES = G.pageNodes, P = G.P, nodeOf = G.nodeOf, adj = G.adj;
+
+    if (!dragging) spin += (baseSpin * (1 - zIn) - spin) * 0.02;
     rotY += spin;
     tiltX += (targetTiltX - tiltX) * 0.05;
     tiltY += (targetTiltY - tiltY) * 0.05;
@@ -477,12 +617,31 @@
       tmp[3] = f;
     };
 
+    let fx = gcx, fy = gcy, pvx = gcx, pvy = gcy;
     if (inHome) {
       nodes.forEach((n, ni) => {
         project(n.p[0], n.p[1], n.p[2]);
         const s = nodeScr[ni];
         s.x = tmp[0]; s.y = tmp[1]; s.z = tmp[2]; s.r = n.r * tmp[3] * scale;
       });
+      // zoom about the focused node, sliding it to the centre as we get close
+      if (focus >= 0 && zl > 0 && PAGE_NODES[focus] != null) {
+        const f = nodeScr[PAGE_NODES[focus]], sm = zIn * zIn * (3 - 2 * zIn);
+        fx = f.x; fy = f.y;
+        pvx = fx + (gcx - fx) * sm; pvy = fy + (gcy - fy) * sm;
+      }
+      if (Zm !== 1) for (const sc of nodeScr) { sc.x = pvx + (sc.x - fx) * Zm; sc.y = pvy + (sc.y - fy) * Zm; sc.r *= Zm; }
+      // crossing a threshold changes level
+      if (!entering && elapsed > 250) {
+        if (zl > ZIN * 0.96 && zlT > ZIN * 0.9 && focus >= 0) {
+          entering = true; skipDive = true;
+          if (pending) setTimeout(route, 0);
+          else location.hash = "#/" + G.pages[focus].id;
+        } else if (zl < ZOUT * 0.96 && zlT < ZOUT * 0.9 && G.parent != null) {
+          entering = true;
+          location.hash = "#/" + G.parent;
+        }
+      }
       const settled = elapsed > DUR * 0.7;
       hovered = labelHover >= 0 ? labelHover : (!dragging && mouse.active && settled ? hit(mouse.x, mouse.y) : -1);
     } else {
@@ -499,13 +658,15 @@
       const labelsShow = elapsed > DUR * 0.6;
       PAGE_NODES.forEach((ni, pi) => {
         const s = nodeScr[ni], el = labels[pi];
+        if (!el) return;
         const lx = s.x / dpr - stageBox.x, ly = s.y / dpr - stageBox.y;
         const off = s.r / dpr + 10;
         const lw = el.offsetWidth;
         const left = lx + off + lw > stageBox.w - 4 ? lx - off - lw : lx + off;
         const depth = Math.min(1, Math.max(0, (0.7 - s.z) / 1.4));
         el.style.transform = `translate(${left.toFixed(1)}px, ${(ly - 13).toFixed(1)}px)`;
-        el.style.opacity = labelsShow ? (0.3 + 0.7 * depth).toFixed(2) : "0";
+        const zFade = (focus === pi ? 1 : 1 - zIn) * Math.min(1, Math.max(0, 1 + zl));
+        el.style.opacity = labelsShow && el.isConnected ? ((0.3 + 0.7 * depth) * zFade).toFixed(2) : "0";
         el.style.zIndex = String(Math.round(depth * 10));
         el.classList.toggle("hot", hovered === pi);
       });
@@ -524,6 +685,16 @@
     if (!inHome) {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       progressEl.style.transform = `scaleX(${max > 0 ? Math.min(1, window.scrollY / max) : 0})`;
+    }
+    // zoom meter: how close you are to crossing into the next level
+    const zv = inHome ? (zl >= 0 ? zl / ZIN : -zl / ZOUT) : -outAmt;
+    if (Math.abs(zv - lastZv) > 0.004) {
+      lastZv = zv;
+      zmEl.classList.toggle("on", Math.abs(zv) > 0.03);
+      zmFill.style.transform = `scaleY(${Math.min(1, Math.abs(zv)).toFixed(3)})`;
+      zmLabel.textContent = zv > 0 ? "zoom in" : "zoom out";
+      pagesEl.style.transform = !inHome && outAmt > 0 ? `scale(${(1 - 0.07 * outAmt).toFixed(4)})` : "";
+      pagesEl.style.opacity = !inHome && outAmt > 0 ? (1 - 0.6 * outAmt).toFixed(3) : "";
     }
 
     // ----- sculpture camera (page mode) -----
@@ -572,9 +743,9 @@
       if (inHome) {
         const o = i * 4;
         project(P[o], P[o + 1], P[o + 2]);
-        tx = tmp[0]; ty = tmp[1];
+        tx = pvx + (tmp[0] - fx) * Zm; ty = pvy + (tmp[1] - fy) * Zm;
         const depth = 0.35 + 0.65 * Math.min(1, Math.max(0, (1.3 - tmp[2]) / 2.6));
-        tb = P[o + 3] * depth;
+        tb = P[o + 3] * depth * zBoost;
         const n = nodeOf[i];
         if (n >= 0 && hoverAmt[n] > 0.002) {
           const s = nodeScr[n], k = hoverAmt[n];
@@ -677,7 +848,7 @@
     // ----- data pulses running along edges (home only) -----
     if (inHome && elapsed > DUR * 0.8) {
       const fade = Math.min(1, (elapsed - DUR * 0.8) / 600);
-      for (const pl of pulses) {
+      for (const pl of getPulses(G)) {
         pl.p += pl.s;
         if (pl.p >= 1) {
           const opts = adj[pl.b].filter((n) => n !== pl.a);
@@ -690,11 +861,12 @@
           const p = pl.p - tr * 0.025;
           if (p < 0) break;
           project(A[0] + (B[0] - A[0]) * p, A[1] + (B[1] - A[1]) * p, A[2] + (B[2] - A[2]) * p);
-          const rad = (3.2 - tr * 0.35) * dpr * tmp[3];
+          const rad = (3.2 - tr * 0.35) * dpr * tmp[3] * Math.sqrt(Zm);
+          const qx = pvx + (tmp[0] - fx) * Zm, qy = pvy + (tmp[1] - fy) * Zm;
           const al = 0.7 * fade * (1 - tr / 6);
           for (let j = 0; j < 46; j++) {
-            const px = (tmp[0] + (Math.random() + Math.random() - 1) * rad) | 0;
-            const py = (tmp[1] + (Math.random() + Math.random() - 1) * rad) | 0;
+            const px = (qx + (Math.random() + Math.random() - 1) * rad) | 0;
+            const py = (qy + (Math.random() + Math.random() - 1) * rad) | 0;
             if (px < 0 || py < 0 || px >= W || py >= H) continue;
             const k = py * W + px;
             acc[k] += al;
@@ -797,7 +969,27 @@
     document.title = `${activePage.dataset.title} — Dhruv Khemka`;
   };
 
-  const goHome = () => {
+  // Hero text follows the graph level
+  const wordEl = document.querySelector("[data-scramble]");
+  const setGraph = (g) => {
+    G = g;
+    buildLabels();
+    document.querySelectorAll(".hero-nav").forEach((n) => (n.hidden = n.dataset.nav !== g.id));
+    document.getElementById("tagline").textContent = g.tagline;
+    document.getElementById("hint").textContent = g.hint;
+    if (wordEl.dataset.final !== g.heading) {
+      wordEl._scrambling = false;
+      wordEl.dataset.final = g.heading;
+      wordEl.textContent = g.heading;
+      scramble(wordEl, 26);
+    }
+  };
+
+  let currentId = "";
+  const parentOf = (id) => (id.includes("/") ? id.split("/")[0] : id === "" ? null : "");
+
+  const openGraph = (id, prev) => {
+    const wasGraph = mode === "home";
     clearTimeout(showTimer);
     body.classList.remove("mode-page");
     body.classList.add("mode-home");
@@ -805,15 +997,33 @@
     activePage = null;
     if (demo) { demo.destroy(); demo = null; }
     window.scrollTo(0, 0);
+    const g = GRAPHS[id];
+    setGraph(g);
     measureStage();
+    lastWheel = 0; zlT = 0; zRate = 0.05;
+    const from = g.pages.findIndex((p) => p.id === prev);
+    if (reduceMotion) { zl = 0; focus = -1; }
+    else if (from >= 0) { focus = from; zl = ZIN; zRate = 0.045; }                 // backing out of a child: start inside its node
+    else if (g.parent === prev && wasGraph) { focus = -1; zl = Math.log(0.14); }   // diving in from the parent: grow from a speck
+    else { focus = -1; zl = id === "" ? 0 : Math.log(0.3); }
     begin("home");
-    document.title = "Dhruv Khemka";
+    document.title = id ? `${g.heading} — Dhruv Khemka` : "Dhruv Khemka";
   };
 
   const route = () => {
-    const id = location.hash.replace(/^#\/?/, "");
-    if (sections[id]) openPage(id);
-    else if (mode !== "home" || activePage) goHome();
+    let id = location.hash.replace(/^#\/?/, "");
+    if (!GRAPHS[id] && !sections[id]) id = "";
+    if (id === currentId && !pending) { entering = false; return; }
+    // Stepping into one of this graph's nodes by click or link: dive first, open when we arrive
+    if (mode === "home" && !skipDive && !reduceMotion && !pending) {
+      const pi = G.pages.findIndex((p) => p.id === id);
+      if (pi >= 0) { pending = id; focus = pi; zlT = ZIN * 1.07; zRate = 0.085; return; }
+    }
+    const prev = currentId;
+    skipDive = false; pending = null; entering = false; outAmt = 0;
+    currentId = id;
+    if (GRAPHS[id]) openGraph(id, prev);
+    else openPage(id);
   };
 
   window.addEventListener("hashchange", route);
@@ -827,6 +1037,7 @@
     cur[i * 2 + 1] = by + (Math.random() - 0.5) * 6 * dpr;
     curB[i] = 0.9;
   }
+  setGraph(G);
   begin("home");
   requestAnimationFrame(frame);
   (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
@@ -856,11 +1067,8 @@
   /* =========================================================
      11. Wordmark scramble (on load and on hover)
      ========================================================= */
-  const word = document.querySelector("[data-scramble]");
-  if (word) {
-    scramble(word, 40);
-    word.addEventListener("pointerenter", () => scramble(word, 22));
-  }
+  scramble(wordEl, 40);
+  wordEl.addEventListener("pointerenter", () => scramble(wordEl, 22));
 
   /* =========================================================
      12. Cards: cursor spotlight + 3D tilt · magnetic links

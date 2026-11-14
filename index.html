@@ -14,6 +14,7 @@
   <canvas id="dust" aria-hidden="true"></canvas>
   <div class="grain" aria-hidden="true"></div>
   <div class="progress" aria-hidden="true"></div>
+  <div class="zoom-meter mono" aria-hidden="true"><span class="zm-label"></span><div class="zm-track"><div class="zm-fill"></div></div></div>
   <div class="cursor" aria-hidden="true"></div>
   <div class="cursor-dot" aria-hidden="true"></div>
 
@@ -26,11 +27,17 @@
 
     <div class="hero-stage" id="stage">
       <div class="node-labels" id="labels"></div>
-      <p class="hint mono small muted">Click a node · drag to spin · click space to blast</p>
+      <p class="hint mono small muted" id="hint">Scroll into a node · drag to spin</p>
     </div>
 
     <div class="hero-copy">
-      <nav class="hero-nav" aria-label="Primary">
+      <nav class="hero-nav" data-nav="projects" aria-label="Projects" hidden>
+        <a href="#/">← Home</a>
+        <a href="#/projects/orderbook">Order Book</a>
+        <a href="#/projects/sort">Sort Race</a>
+        <a href="#/projects/crossover">Crossover</a>
+      </nav>
+      <nav class="hero-nav" data-nav="" aria-label="Primary">
         <a href="#/about">About</a>
         <a href="#/experience">Experience</a>
         <a href="#/projects">Projects</a>
@@ -38,7 +45,7 @@
         <a href="assets/Dhruv-Khemka-Resume.pdf" target="_blank" rel="noopener">Résumé</a>
       </nav>
       <h1 class="wordmark" data-scramble>Dhruv Khemka</h1>
-      <p class="tagline">Algorithms, probability &amp; markets.</p>
+      <p class="tagline" id="tagline">Algorithms, probability &amp; markets.</p>
     </div>
 
     <div class="ticker" aria-label="Highlights">
@@ -133,70 +140,6 @@
       </div>
     </section>
 
-    <!-- PROJECTS -->
-    <section class="page" data-page="projects" data-title="Projects" hidden>
-      <div class="title-slot" aria-hidden="true"></div>
-      <h2 class="sr-only">Projects</h2>
-      <div class="page-body">
-        <div class="projects stagger">
-          <article class="card project">
-            <div class="project-head">
-              <span class="mono small muted">P/01</span>
-              <a class="ext" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener" aria-label="Limit Order Book on GitHub">GitHub ↗</a>
-            </div>
-            <h3>Limit Order Book &amp; Matching Engine</h3>
-            <p>An exchange-style engine that fills limit and market orders by price-time priority, handling partial fills and logging every trade.</p>
-            <div class="metrics">
-              <div><span class="stat">O(log n)</span><span class="mono small muted">best price</span></div>
-              <div><span class="stat">O(1)</span><span class="mono small muted">cancel</span></div>
-              <div><span class="stat" data-count>1,000</span><span class="mono small muted">randomized test runs</span></div>
-            </div>
-            <p class="small muted">Price levels are dicts of deques with heaps over bid/ask prices; cancels use lazy deletion. Verified against a brute-force reference book on 1,000 randomized 200-message sequences.</p>
-            <div class="tags"><span>Python</span><span>heapq</span><span>collections</span><span>pytest</span></div>
-            <a class="run-demo" href="#/projects/orderbook">▶ Run it live</a>
-          </article>
-
-          <article class="card project">
-            <div class="project-head">
-              <span class="mono small muted">P/02</span>
-              <a class="ext" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener" aria-label="Distribution Sort on GitHub">GitHub ↗</a>
-            </div>
-            <h3>Expected Linear-Time Distribution Sort</h3>
-            <p>A sort that buckets values by a CDF fit to a random sample — uniform, normal or exponential via a Kolmogorov–Smirnov test, else an empirical CDF.</p>
-            <div class="metrics">
-              <div><span class="stat up" data-count>3.6×</span><span class="mono small muted">vs merge sort</span></div>
-              <div><span class="stat">O(n)</span><span class="mono small muted">expected</span></div>
-              <div><span class="stat" data-count>405K</span><span class="mono small muted">real file records</span></div>
-            </div>
-            <p class="small muted">2.0–3.6× faster than merge sort on 1M generated values and up to 2.7× on real macOS file records. Heavy duplicates erase the gain; output verified against <code>sorted()</code>.</p>
-            <div class="tags"><span>Python</span><span>statistics</span><span>bisect</span></div>
-            <a class="run-demo" href="#/projects/sort">▶ Run it live</a>
-          </article>
-
-          <article class="card project">
-            <div class="project-head">
-              <span class="mono small muted">P/03</span>
-              <a class="ext" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener" aria-label="Stock Analyzer on GitHub">GitHub ↗</a>
-            </div>
-            <h3>Moving-Average Crossover Stock Analyzer</h3>
-            <p>A CLI that pulls daily prices for any ticker from Yahoo Finance, computes short- and long-window SMAs, and charts every golden and death cross.</p>
-            <div class="spark" aria-hidden="true">
-              <svg viewBox="0 0 300 70" preserveAspectRatio="none">
-                <path class="price" d="M0,50 L15,46 L30,52 L45,40 L60,44 L75,30 L90,34 L105,22 L120,28 L135,18 L150,24 L165,32 L180,28 L195,42 L210,38 L225,50 L240,44 L255,36 L270,30 L285,22 L300,18" />
-                <path class="sma" d="M0,49 C40,46 70,38 110,28 S170,26 200,38 S260,42 300,24" />
-                <circle cx="96" cy="31" r="3.5" class="cross up" />
-                <circle cx="196" cy="38" r="3.5" class="cross down" />
-              </svg>
-            </div>
-            <p class="small muted">Crossovers detected by differencing a short-above-long indicator series; unit tested on synthetic price data.</p>
-            <div class="tags"><span>Python</span><span>pandas</span><span>yfinance</span><span>Matplotlib</span></div>
-            <a class="run-demo" href="#/projects/crossover">▶ Run it live</a>
-          </article>
-        </div>
-        <a class="next" href="#/toolkit">Next: Toolkit →</a>
-      </div>
-    </section>
-
     <!-- DEMO: Order Book -->
     <section class="page demo" data-page="projects/orderbook" data-title="Order Book" hidden>
       <div class="title-slot" aria-hidden="true"></div>
@@ -206,6 +149,21 @@
         <div class="demo-stage" data-stage></div>
         <div class="demo-controls" data-controls></div>
         <div class="demo-readout mono small" data-readout></div>
+        <article class="card project project-detail">
+        <div class="project-head">
+          <span class="mono small muted">P/01</span>
+          <a class="ext" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener" aria-label="Limit Order Book on GitHub">GitHub ↗</a>
+        </div>
+        <h3>Limit Order Book &amp; Matching Engine</h3>
+        <p>An exchange-style engine that fills limit and market orders by price-time priority, handling partial fills and logging every trade.</p>
+        <div class="metrics">
+          <div><span class="stat">O(log n)</span><span class="mono small muted">best price</span></div>
+          <div><span class="stat">O(1)</span><span class="mono small muted">cancel</span></div>
+          <div><span class="stat" data-count>1,000</span><span class="mono small muted">randomized test runs</span></div>
+        </div>
+        <p class="small muted">Price levels are dicts of deques with heaps over bid/ask prices; cancels use lazy deletion. Verified against a brute-force reference book on 1,000 randomized 200-message sequences.</p>
+        <div class="tags"><span>Python</span><span>heapq</span><span>collections</span><span>pytest</span></div>
+      </article>
         <div class="demo-foot">
           <a class="next" href="#/projects">← All projects</a>
           <a class="next" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener">Source on GitHub ↗</a>
@@ -222,6 +180,21 @@
         <div class="demo-stage" data-stage></div>
         <div class="demo-controls" data-controls></div>
         <div class="demo-readout mono small" data-readout></div>
+        <article class="card project project-detail">
+        <div class="project-head">
+          <span class="mono small muted">P/02</span>
+          <a class="ext" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener" aria-label="Distribution Sort on GitHub">GitHub ↗</a>
+        </div>
+        <h3>Expected Linear-Time Distribution Sort</h3>
+        <p>A sort that buckets values by a CDF fit to a random sample — uniform, normal or exponential via a Kolmogorov–Smirnov test, else an empirical CDF.</p>
+        <div class="metrics">
+          <div><span class="stat up" data-count>3.6×</span><span class="mono small muted">vs merge sort</span></div>
+          <div><span class="stat">O(n)</span><span class="mono small muted">expected</span></div>
+          <div><span class="stat" data-count>405K</span><span class="mono small muted">real file records</span></div>
+        </div>
+        <p class="small muted">2.0–3.6× faster than merge sort on 1M generated values and up to 2.7× on real macOS file records. Heavy duplicates erase the gain; output verified against <code>sorted()</code>.</p>
+        <div class="tags"><span>Python</span><span>statistics</span><span>bisect</span></div>
+      </article>
         <div class="demo-foot">
           <a class="next" href="#/projects">← All projects</a>
           <a class="next" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener">Source on GitHub ↗</a>
@@ -238,6 +211,24 @@
         <div class="demo-stage" data-stage></div>
         <div class="demo-controls" data-controls></div>
         <div class="demo-readout mono small" data-readout></div>
+        <article class="card project project-detail">
+        <div class="project-head">
+          <span class="mono small muted">P/03</span>
+          <a class="ext" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener" aria-label="Stock Analyzer on GitHub">GitHub ↗</a>
+        </div>
+        <h3>Moving-Average Crossover Stock Analyzer</h3>
+        <p>A CLI that pulls daily prices for any ticker from Yahoo Finance, computes short- and long-window SMAs, and charts every golden and death cross.</p>
+        <div class="spark" aria-hidden="true">
+          <svg viewBox="0 0 300 70" preserveAspectRatio="none">
+            <path class="price" d="M0,50 L15,46 L30,52 L45,40 L60,44 L75,30 L90,34 L105,22 L120,28 L135,18 L150,24 L165,32 L180,28 L195,42 L210,38 L225,50 L240,44 L255,36 L270,30 L285,22 L300,18" />
+            <path class="sma" d="M0,49 C40,46 70,38 110,28 S170,26 200,38 S260,42 300,24" />
+            <circle cx="96" cy="31" r="3.5" class="cross up" />
+            <circle cx="196" cy="38" r="3.5" class="cross down" />
+          </svg>
+        </div>
+        <p class="small muted">Crossovers detected by differencing a short-above-long indicator series; unit tested on synthetic price data.</p>
+        <div class="tags"><span>Python</span><span>pandas</span><span>yfinance</span><span>Matplotlib</span></div>
+      </article>
         <div class="demo-foot">
           <a class="next" href="#/projects">← All projects</a>
           <a class="next" href="https://github.com/DhruvKhemka1" target="_blank" rel="noopener">Source on GitHub ↗</a>
@@ -291,12 +282,19 @@
 
     <footer class="footer mono small muted">
       <span>© <span id="year"></span> Dhruv Khemka</span>
-      <span class="keys">Keys: 1–5 pages · ← → · Esc home</span>
+      <span class="keys">Scroll up at the top to zoom out · keys 1–5 · Esc back</span>
       <a href="#/">Home ↺</a>
     </footer>
   </main>
 
   <script src="demos.js"></script>
-  <script src="main.js"></script>
+  <script>
+    // Million-grain WebGL engine by default; the original engine if WebGL2 is missing (or with ?cpu in the address)
+    (function () {
+      var s = document.createElement("script");
+      s.src = /[?&]cpu\b/.test(location.search) ? "main.js" : "main-gl.js";
+      document.body.appendChild(s);
+    })();
+  </script>
 </body>
 </html>
